@@ -18,7 +18,7 @@ app = Flask(__name__)
 # Configuration
 #app.config["MONGO_URI"] = os.getenv("MONGO_URI", "mongodb+srv://hanibenjemaa39:hani1234@cancerv2.keq4got.mongodb.net/cancer_db?retryWrites=true&w=majority&appName=cancerV2")
 app.config["MONGO_URI"] = os.getenv("MONGO_URI","mongodb+srv://hanibenjemaa39:hani1234@cancerv3.cnjbfhn.mongodb.net/?retryWrites=true&w=majority&appName=cancerV3")
-# app.config["SECRET_KEY"] = os.getenv("JWT_SECRET_KEY", "your-secure-jwt-secret-key")
+# 
 # app.config["MAIL_SERVER"] = "smtp.gmail.com"
 # app.config["MAIL_PORT"] = 465
 # app.config["MAIL_USE_SSL"] = True

@@ -7,7 +7,7 @@ import datetime
 from functools import wraps
 import re
 from http import HTTPStatus
-from dataset import users_collection
+from dataset import users_collection,patients_collection
 import logging
 from pymongo.errors import PyMongoError
 import string
@@ -241,6 +241,38 @@ def update_doctors(matricule):
 
 
 
+# @Doctor_bp.route("/delete-doctors/<matricule>", methods=["DELETE"])
+# def delete_doctors(matricule):
+#     try:
+#         # Validate matricule format (optional, adjust regex as needed)
+#         if not matricule or not isinstance(matricule, str):
+#             return jsonify({"message": "Invalid matricule provided"}), HTTPStatus.BAD_REQUEST
+
+#         # Check if doctor exists
+#         existing_doctor = users_collection.find_one({"matricule": matricule})
+#         if not existing_doctor:
+#             return jsonify({"message": f"Doctor not found with matricule: {matricule}"}), HTTPStatus.NOT_FOUND
+
+#         existing_patients_data = patients_collection.find({"DoctorId": matricule})
+#         if existing_patients_data.deleted_count == 0:
+#             return jsonify({"message": "Patiente data not found with matricule, possibly already removed"}), HTTPStatus.NOT_FOUND
+        
+#         patients_data = patients_collection.delete_many({"DoctorId": matricule})
+#         if patients_data.deleted_count == 0:
+#             return jsonify({"message": "Doctor not deleted, possibly already removed"}), HTTPStatus.NOT_FOUND
+
+#         # Perform deletion
+#         result = users_collection.delete_one({"matricule": matricule})
+#         if result.deleted_count == 0:
+#             return jsonify({"message": "Doctor not deleted, possibly already removed"}), HTTPStatus.NOT_FOUND
+
+#         return jsonify({"message": "Doctor deleted successfully"}), HTTPStatus.OK
+
+#     except PyMongoError as e:
+#         return jsonify({"message": f"Database error during doctor deletion: {str(e)}"}), HTTPStatus.INTERNAL_SERVER_ERROR
+#     except Exception as e:
+#         return jsonify({"message": f"Unexpected error during doctor deletion: {str(e)}"}), HTTPStatus.INTERNAL_SERVER_ERROR 
+
 @Doctor_bp.route("/delete-doctors/<matricule>", methods=["DELETE"])
 def delete_doctors(matricule):
     try:
@@ -253,14 +285,22 @@ def delete_doctors(matricule):
         if not existing_doctor:
             return jsonify({"message": f"Doctor not found with matricule: {matricule}"}), HTTPStatus.NOT_FOUND
 
-        # Perform deletion
-        result = users_collection.delete_one({"matricule": matricule})
-        if result.deleted_count == 0:
+        # Check if any patients exist for the doctor
+        patient_count = patients_collection.count_documents({"DoctorId": matricule})
+        if patient_count > 0:
+            # Delete associated patients
+            patients_result = patients_collection.delete_many({"DoctorId": matricule})
+            if patients_result.deleted_count == 0:
+                return jsonify({"message": "Failed to delete patient data"}), HTTPStatus.INTERNAL_SERVER_ERROR
+
+        # Delete the doctor
+        doctor_result = users_collection.delete_one({"matricule": matricule})
+        if doctor_result.deleted_count == 0:
             return jsonify({"message": "Doctor not deleted, possibly already removed"}), HTTPStatus.NOT_FOUND
 
-        return jsonify({"message": "Doctor deleted successfully"}), HTTPStatus.OK
+        return jsonify({"message": "Doctor and associated patients deleted successfully"}), HTTPStatus.OK
 
     except PyMongoError as e:
         return jsonify({"message": f"Database error during doctor deletion: {str(e)}"}), HTTPStatus.INTERNAL_SERVER_ERROR
     except Exception as e:
-        return jsonify({"message": f"Unexpected error during doctor deletion: {str(e)}"}), HTTPStatus.INTERNAL_SERVER_ERROR 
+        return jsonify({"message": f"Unexpected error during doctor deletion: {str(e)}"}), HTTPStatus.INTERNAL_SERVER_ERROR

@@ -10,6 +10,7 @@ from dateutil.relativedelta import relativedelta
 statistique_bp = Blueprint('statistique', __name__)
 logging.basicConfig(level=logging.ERROR)
 logger = logging.getLogger(__name__)
+
 @statistique_bp.route("/fill-rate/<matricule>", methods=["GET"])
 def get_fill_rate(matricule):
     print("matricule", matricule)
@@ -572,16 +573,23 @@ def get_signup_statistics():
             collation={'locale': 'en', 'strength': 2}
         ))
         signup_trends_by_year = {item['year']: item['count'] for item in signup_trends_by_year_data}
+        Doctor_Count=users_collection.count_documents({"user_type":"doctor"})
+        Visitor_Count=users_collection.count_documents({"user_type":"visitor"})
         return jsonify({
             "message": "Signup statistics retrieved successfully",
             "total_users": total_non_admin,
             "user_type_percentages": user_type_percentages,
             "visitor_specialty_percentages": visitor_specialty_percentages,
+            
             "signup_trends": {
                 "by_day": signup_trends_by_day,
                 "by_month": signup_trends_by_month,
                 "by_year": signup_trends_by_year
-            }
+            },
+            "Doctor_Count":Doctor_Count,
+            "Visitor_Count":Visitor_Count
+
+
         }), HTTPStatus.OK
     except PyMongoError as e:
         return jsonify({"message": f"Database error: {str(e)}"}), HTTPStatus.INTERNAL_SERVER_ERROR
