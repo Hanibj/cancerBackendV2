@@ -1,0 +1,11 @@
+flask_mail
+dotenv
+flask_pymongo
+flask_cors
+pymongo
+dateutil
+bcrypt
+flask_limiter
+gridfs
+jwt
+sklearn

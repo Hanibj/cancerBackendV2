@@ -8,6 +8,11 @@ import json
 from bson import ObjectId
 import io
 from pymongo.errors import PyMongoError
+import logging
+
+# Configure logging
+logging.basicConfig(level=logging.INFO)
+logger = logging.getLogger(__name__)
 
 patients_bp = Blueprint('patients', __name__)
 gridfs = GridFS(db)  # Initialize GridFS
@@ -673,9 +678,118 @@ def get_all_patients_by_matricule(DoctorId):
     except Exception as e:
         return jsonify({"message": f"Erreur lors de la récupération des données des patients : {str(e)}"}), HTTPStatus.INTERNAL_SERVER_ERROR
     
+@patients_bp.route("/Filter-Examen/<DoctorId>/<study_count>",methods=["GET"])
+def get_patients_by_study_count(DoctorId,study_count):
+    try:
+        # Validate DoctorId
+        if not DoctorId:
+            return jsonify({"message": "DoctorId requis"}), HTTPStatus.BAD_REQUEST
 
+        # Validate and convert study_count to integer
+        try:
+            study_count = int(study_count)
+            if study_count < 0:
+                return jsonify({"message": "study_count doit être un entier non négatif"}), HTTPStatus.BAD_REQUEST
+        except ValueError:
+            return jsonify({"message": "study_count doit être un entier"}), HTTPStatus.BAD_REQUEST
 
+        # Determine data field based on normalized parameter
+        normalized = request.args.get("normalized", "false").lower() == "true"
+        data_field = "Donnees_cliniques_pretraitees" if normalized else "Donnees_cliniques_brutes"
 
+        # Optional comparison parameter (exact, at_least, at_most)
+        comparison = request.args.get("comparison", "exact").lower()
+        if comparison not in ("exact", "at_least", "at_most"):
+            return jsonify({"message": "comparison doit être 'exact', 'at_least' ou 'at_most'"}), HTTPStatus.BAD_REQUEST
+
+        all_data = []
+        all_fields = set()
+
+        # Fetch patients for the given DoctorId
+        patients = patients_collection.find({"DoctorId": DoctorId})
+        patient_count = 0
+
+        # Process each patient
+        for patient in patients:
+            folder_number = patient.get("FolderNumber")
+            patient_id = patient.get("patient_id")
+            donnees = patient.get(data_field, [])
+
+            # Count unique StudyID values
+            study_ids = set()
+            for row in donnees:
+                if not isinstance(row, dict):
+                    continue
+                study_id = None
+                for field in ("StudyID", "StudyUid", "studyuid", "studyid", "etudeid"):
+                    if field in row and row[field]:
+                        study_id = row[field]
+                        break
+                if study_id:
+                    study_ids.add(study_id)
+
+            # Check if patient matches the study_count criteria
+            study_count_actual = len(study_ids)
+            if (comparison == "exact" and study_count_actual == study_count) or \
+               (comparison == "at_least" and study_count_actual >= study_count) or \
+               (comparison == "at_most" and study_count_actual <= study_count):
+                patient_count += 1
+                for row in donnees:
+                    if not isinstance(row, dict):
+                        continue
+                    record = {
+                        "FolderNumber": folder_number,
+                        "PatientID": row.get("PatientID", patient_id)
+                    }
+                    for field, value in row.items():
+                        normalized_field = field.lower()
+                        if normalized_field in ("studyuid", "studyid", "etudeid"):
+                            record["StudyID"] = value
+                            all_fields.add("StudyID")
+                        elif normalized_field == "view":
+                            record["View"] = value
+                            all_fields.add("View")
+                        elif normalized_field not in ("foldernumber", "patientid"):
+                            record[field] = value
+                            all_fields.add(field)
+                    all_data.append(record)
+
+        # Check for empty results
+        if not all_data:
+            return jsonify({"message": "Aucun patient trouvé correspondant aux critères", "data": [], "headers": [], "total_patients": 0}), HTTPStatus.OK
+
+        # Define header priority
+        priority_fields = ["FolderNumber", "PatientID"]
+        if "StudyID" in all_fields:
+            priority_fields.append("StudyID")
+            all_fields.discard("StudyID")  # Use discard to avoid KeyError
+        if "View" in all_fields:
+            priority_fields.append("View")
+            all_fields.discard("View")
+
+        # Add other fields in alphabetical order
+        headers = priority_fields + sorted(all_fields)
+
+        # Reorder data to match headers
+        ordered_data = []
+        for record in all_data:
+            ordered_record = {field: record.get(field, None) for field in headers}
+            ordered_data.append(ordered_record)
+
+        response = {
+            "data": ordered_data,
+            "headers": headers,
+            "total_patients": patient_count
+        }
+
+        return jsonify(response), HTTPStatus.OK
+
+    except PyMongoError as e:
+        logger.error(f"Database error in get_patients_by_study_count: {str(e)}")
+        return jsonify({"message": f"Erreur de base de données : {str(e)}"}), HTTPStatus.INTERNAL_SERVER_ERROR
+    except Exception as e:
+        logger.error(f"Unexpected error in get_patients_by_study_count: {str(e)}")
+        return jsonify({"message": f"Erreur lors de la récupération des données des patients : {str(e)}"}), HTTPStatus.INTERNAL_SERVER_ERROR
 
 
 
