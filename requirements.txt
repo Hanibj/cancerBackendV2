@@ -3,7 +3,7 @@ dotenv
 flask_pymongo
 flask_cors
 pymongo
-dateutil
+dateutil="2.9.0"
 bcrypt
 flask_limiter
 gridfs
